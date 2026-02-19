@@ -23,7 +23,7 @@ class IndexTTS2ProNode:
         return {
             "required": {
                 "structured_text": ("STRING", {"multiline": True, "default": "<Narrator>这是一段旁白文本。<Character1>你好，我是角色1。<Narrator>他说道。"}),
-                "narrator_audio": ("AUDIO", {"description": "正文/旁白的参考音频"}),
+                "character0_audio": ("AUDIO", {"description": "正文/旁白的参考音频"}),
                 "mode": (["Auto", "Duration", "Tokens"], {"default": "Auto"}),
             },
             "optional": {
@@ -32,9 +32,6 @@ class IndexTTS2ProNode:
                 "character3_audio": ("AUDIO", {"description": "角色3的参考音频"}),
                 "character4_audio": ("AUDIO", {"description": "角色4的参考音频"}),
                 "character5_audio": ("AUDIO", {"description": "角色5的参考音频"}),
-                # 情感控制 - 可选的情感参考音频
-                "emotion_audio": ("AUDIO", {"description": "情感参考音频（可选，用于控制整体情感）"}),
-                "emotion_weight": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.4, "step": 0.05}),
                 # 高级生成参数
                 "do_sample_mode": (["off", "on"], {"default": "on"}),
                 "temperature": ("FLOAT", {"default": 0.8, "min": 0.1, "max": 2.0, "step": 0.05}),
@@ -47,12 +44,13 @@ class IndexTTS2ProNode:
                 "max_tokens_per_sentence": ("INT", {"default": 120, "min": 0, "max": 600, "step": 5}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 2**32 - 1}),
                 # 缓存控制
-                "cache_control": ("DICT", {"default": None}),
+                "cache_control": (["off","on"], {"default": "off"}),
+                "export_subtitle":(["None",".srt"],{"default":"None"})
             }
         }
     
-    RETURN_TYPES = ("AUDIO", "INT", "STRING", "STRING",)
-    RETURN_NAMES = ("audio", "seed", "Subtitle", "SimplifiedSubtitle",)
+    RETURN_TYPES = ("AUDIO", "INT", "STRING")
+    RETURN_NAMES = ("audio", "seed","subtitle")
     FUNCTION = "generate_multi_voice_speech"
     CATEGORY = "audio"
     
@@ -91,71 +89,57 @@ class IndexTTS2ProNode:
         else:
             raise ValueError("AUDIO input must be ComfyUI dict or (wave, sr)")
     
-    def _parse_structured_text(self, structured_text: str) -> List[Tuple[str, str]]:
-        """解析结构化文本
-        
-        Args:
-            structured_text: 结构化文本，如 "<Narrator>This is narrative text<Character1>This is Character1's line"
-            
-        Returns:
-            list: 解析后的文本段落列表，每个元素为 (role, text)
-        """
+    def _parse_structured_text(self,text: str):
         segments = []
-        # 标签匹配模式
-        pattern = re.compile(r'<(Narrator|Character\d+)>([^<]+)')
-        
-        # 查找所有匹配
-        matches = pattern.findall(structured_text)
-        
-        # 如果找不到任何匹配，将整个文本作为旁白处理
-        if not matches:
-            segments.append(("Narrator", structured_text))
-        else:
-            for role, text in matches:
-                text = text.strip()
-                if text:  # 只添加非空文本
-                    segments.append((role, text))
+        pattern = re.compile(r'(\[[^\]]+\]|\([^\)]+\)|\{[^\}]+\})')
+        parts = pattern.split(text)
+        curr_role = "Character0"
+        curr_emo = "Neutral"
+        emotions={}
+        for i in range(len(parts)):
+            part = parts[i]
+            part = part.strip()
+            if not part: continue
+            if part.startswith('['): # 切换角色
+                curr_role = part[1:-1]
+                if curr_role not in list(emotions.keys()):
+                    emotions[part[1:-1]]="Neutral"
+            elif part.startswith('('): # 更改的是curr_role这个角色的情感
+                curr_emo = part[1:-1]
+                emotions[curr_role]=curr_emo
                 
+            elif part.startswith('{'): # 插入停顿
+                try:
+                    duration = float(part[1:-2]) # 提取 "1.2"
+                    segments.append({"type": "pause", "duration": duration})
+                except: pass
+            else: # 普通文本
+                segments.append({
+                    "type": "speech",
+                    "role": curr_role,
+                    "emotion": emotions[curr_role],
+                    "text": part
+                })
         return segments
-    
-    def _seconds_to_time_format(self, seconds: float) -> str:
-        """将秒数转换为分:秒.毫秒格式"""
-        minutes = int(seconds // 60)
-        remaining_seconds = seconds % 60
-        seconds_int = int(remaining_seconds)
-        milliseconds = int((remaining_seconds - seconds_int) * 1000)
-        return f"{minutes}:{seconds_int:02d}.{milliseconds:03d}"
-    
-    def _parse_time_format(self, time_str: str) -> float:
-        """将时间字符串转换为秒数"""
-        if "." in time_str:
-            time_part, ms_part = time_str.split(".")
-            parts = time_part.split(":")
-            if len(parts) == 2:
-                minutes = int(parts[0])
-                seconds = int(parts[1])
-                milliseconds = int(ms_part[:3].ljust(3, '0'))
-                return minutes * 60 + seconds + milliseconds / 1000.0
-        else:
-            parts = time_str.split(":")
-            if len(parts) == 2:
-                minutes = int(parts[0])
-                seconds = int(parts[1])
-                return minutes * 60 + seconds
-        return 0.0
-    
+    def _sec_to_time(self, sec):
+        """将秒数转换为标准的 SRT 时间格式: HH:MM:SS,mmm"""
+        h = int(sec // 3600)
+        m = int((sec % 3600) // 60)
+        s = int(sec % 60)
+        ms = int(round(sec % 1, 3) * 1000)
+        # 使用 f-string 自动补零，比手动 rjust 更高效
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
     def generate_multi_voice_speech(
         self,
         structured_text: str,
-        narrator_audio,
+        character0_audio,
         mode: str = "Auto",
         character1_audio=None,
         character2_audio=None,
         character3_audio=None,
         character4_audio=None,
         character5_audio=None,
-        emotion_audio=None,
-        emotion_weight: float = 0.8,
         do_sample_mode: str = "on",
         temperature: float = 0.8,
         top_p: float = 0.9,
@@ -167,93 +151,76 @@ class IndexTTS2ProNode:
         max_tokens_per_sentence: int = 120,
         seed: int = 0,
         cache_control=None,
+        export_subtitle="None"
     ):
         """
         生成多角色语音的主函数
         """
         try:
             print(f"[IndexTTS2 Pro] 开始多角色语音生成...")
-            print(f"[IndexTTS2 Pro] 结构化文本: {structured_text[:100]}...")
-            
-            # 解析结构化文本
             parsed_segments = self._parse_structured_text(structured_text)
-            print(f"[IndexTTS2 Pro] 解析到 {len(parsed_segments)} 个文本段落")
-            
-            # 构建角色音频映射
-            character_audios = {
-                "Narrator": narrator_audio,
-            }
-            for i, char_audio in enumerate([character1_audio, character2_audio, character3_audio, character4_audio, character5_audio], 1):
+            character_audios = {}
+            for i, char_audio in enumerate([character0_audio,character1_audio,character2_audio,character3_audio,character4_audio,character5_audio], 0):
                 if char_audio is not None:
-                    character_audios[f"Character{i}"] = char_audio
-            
-            # 处理情感音频
-            emo_ref = self._process_audio_input(emotion_audio) if emotion_audio else None
-            
+                    character_audios[f"Character{i}"] = self._process_audio_input(char_audio)
+            generated_subtitle=""
             # 生成音频片段
             audio_segments = []
-            subtitle_data = []
-            current_time = 0.0
-            
-            for role, text in parsed_segments:
-                print(f"[IndexTTS2 Pro] 处理: {role} - {text[:50]}...")
-                
-                # 选择参考音频
-                if role in character_audios and character_audios[role] is not None:
-                    ref_audio = character_audios[role]
+            current_time=0.0
+            print(parsed_segments)
+            subtitle_count=1
+            for part in parsed_segments:
+                sr=44100
+                if part["type"]=="speech":
+                    # 选择参考音频
+                    if not(part["role"] in list(character_audios.keys())):
+                        print(part["role"] , list(character_audios.keys()))
+                        raise ValueError("缺失语音，已暂停推理")
+                    
+                    try:
+                        sr, wave, _ = self.engine.generate(
+                            text=part["text"],
+                            reference_audio=character_audios[part["role"]],
+                            mode=mode,
+                            do_sample=(do_sample_mode == "on"),
+                            temperature=temperature,
+                            top_p=top_p,
+                            top_k=top_k,
+                            num_beams=num_beams,
+                            repetition_penalty=repetition_penalty,
+                            length_penalty=length_penalty,
+                            max_mel_tokens=max_mel_tokens,
+                            max_tokens_per_sentence=max_tokens_per_sentence,
+                            emo_text=part["emotion"],
+                            seed=seed,
+                            return_subtitles=False,
+                        )
+                        #先写入字幕
+                        #格式：hour:minute:second,millisecond --> hour:minute:second,millisecond
+                        '''
+                        字幕序号
+                        字幕显示的起始时间
+                        字幕内容（可多行）
+                        空白行（表示本字幕段的结束）
+                        '''
+                        audio_length = len(wave) / sr
+                        if export_subtitle != "None":
+                            generated_subtitle+="{}\n{} --> {}\n{}\n\n".format(subtitle_count,self._sec_to_time(current_time),self._sec_to_time(current_time+audio_length),part["text"])
+                        current_time +=audio_length
+                        subtitle_count+=1
+                        audio_segments.append((wave, sr))
+                        print(f"[IndexTTS2 Pro] 生成音频: {audio_length:.2f}秒")
+
+                    except Exception as e:
+                        print(f"[IndexTTS2 Pro] 生成 {part["role"]} 语音失败: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
                 else:
-                    # 使用旁白音频作为默认参考
-                    ref_audio = narrator_audio
-                    print(f"[IndexTTS2 Pro] 警告: 没有找到 {role} 的音频，使用旁白音频")
-                
-                try:
-                    # 处理参考音频
-                    ref = self._process_audio_input(ref_audio)
-                    
-                    # 调用 TTS2 引擎生成音频
-                    sr, wave, _ = self.engine.generate(
-                        text=text,
-                        reference_audio=ref,
-                        mode=mode,
-                        do_sample=(do_sample_mode == "on"),
-                        temperature=temperature,
-                        top_p=top_p,
-                        top_k=top_k,
-                        num_beams=num_beams,
-                        repetition_penalty=repetition_penalty,
-                        length_penalty=length_penalty,
-                        max_mel_tokens=max_mel_tokens,
-                        max_tokens_per_sentence=max_tokens_per_sentence,
-                        emo_ref_audio=emo_ref,
-                        emo_weight=emotion_weight,
-                        seed=seed,
-                        return_subtitles=False,
-                    )
-                    
-                    # 计算音频长度
-                    audio_length = len(wave) / sr
-                    
-                    # 添加字幕数据
-                    start_time = self._seconds_to_time_format(current_time)
-                    end_time = self._seconds_to_time_format(current_time + audio_length)
-                    subtitle_item = {
-                        "id": role,
-                        "字幕": text,
-                        "start": start_time,
-                        "end": end_time
-                    }
-                    subtitle_data.append(subtitle_item)
-                    current_time += audio_length
-                    
-                    # 添加到音频段落列表
-                    audio_segments.append((wave, sr))
-                    print(f"[IndexTTS2 Pro] 生成音频: {audio_length:.2f}秒")
-                    
-                except Exception as e:
-                    print(f"[IndexTTS2 Pro] 生成 {role} 语音失败: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
+                    duration = part["duration"]
+                    silence_wave = np.zeros(int(duration * sr), dtype=np.float32)
+                    audio_segments.append((silence_wave, sr))
+                    current_time += duration
             
             if not audio_segments:
                 raise ValueError("没有成功生成任何音频段落")
@@ -269,48 +236,6 @@ class IndexTTS2ProNode:
             # 转换为 ComfyUI 格式
             wave_tensor = torch.tensor(concatenated, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
             audio_output = {"waveform": wave_tensor, "sample_rate": int(sample_rate)}
-            
-            # 生成 Subtitle JSON
-            subtitle_json = json.dumps(subtitle_data, ensure_ascii=False, indent=2)
-            
-            # 生成简化字幕格式
-            simplified_subtitles = []
-            for item in subtitle_data:
-                start_time = item["start"]
-                end_time = item["end"]
-                text = item["字幕"]
-                
-                # 按标点符号分句
-                sentences = re.split(r'([,，.。!！?？;；])', text)
-                sentences = [s + next_s for s, next_s in zip(sentences[::2], sentences[1::2] + [""])] if len(sentences) > 1 else [text]
-                sentences = [s for s in sentences if s.strip()]
-                
-                if not sentences:
-                    sentences = [text]
-                
-                # 计算每个子句的时长
-                total_duration = self._parse_time_format(end_time) - self._parse_time_format(start_time)
-                sentence_duration = total_duration / len(sentences) if sentences else total_duration
-                
-                # 为每个子句生成时间点
-                for i, sentence in enumerate(sentences):
-                    if not sentence.strip():
-                        continue
-                    
-                    sub_start = self._parse_time_format(start_time) + i * sentence_duration
-                    sub_end = sub_start + sentence_duration
-                    
-                    sub_start_formatted = self._seconds_to_time_format(sub_start)
-                    sub_end_formatted = self._seconds_to_time_format(sub_end)
-                    
-                    time_line = f">> {sub_start_formatted}-{sub_end_formatted}"
-                    text_line = f">> {sentence}"
-                    
-                    simplified_subtitles.append(time_line)
-                    simplified_subtitles.append(text_line)
-            
-            simplified_subtitle_str = "\n".join(simplified_subtitles)
-            
             # 处理缓存控制
             try:
                 keep = bool(cache_control.get("keep_cached")) if isinstance(cache_control, dict) else False
@@ -319,7 +244,7 @@ class IndexTTS2ProNode:
             except Exception:
                 pass
             
-            return (audio_output, seed, subtitle_json, simplified_subtitle_str)
+            return (audio_output, seed, generated_subtitle)
             
         except Exception as e:
             import traceback

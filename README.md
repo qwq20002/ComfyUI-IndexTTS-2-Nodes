@@ -17,13 +17,15 @@
 3、用你的ComfyUI虚拟环境运行downlaodModels.py
 4、打开ComfyUI美美爽用
 
+目前发现的问题：
+Index TTS 2 - Customized的Happy参数连接后不正常
 
 鸣谢：
 感谢IndexTTS原项目：https://github.com/index-tts/index-tts
 感谢原作者chenpipi0817
 感谢ComfyUI社区的支持
 感谢您的使用
-感谢Gemini Pro的巨大支持（逃）
+感谢Gemini Pro的巨大大大大大大大大大大支持（逃）
 
 许可证
 请参考原始IndexTTS项目许可证。

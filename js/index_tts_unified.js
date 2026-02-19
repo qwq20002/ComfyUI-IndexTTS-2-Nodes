@@ -25,7 +25,7 @@ app.registerExtension({
 
             for (const w of node.widgets) {
                 if (!allControlledWidgets.includes(w.name)) continue;
-
+                if (w.type === "converted-widget" || w.name === "Happy" && node.inputs?.some(i => i.name === "Happy")) {continue; }
                 // 判断当前控件是否属于当前选中的模式
                 const shouldShow = WIDGET_GROUPS[currentMode]?.includes(w.name);
 

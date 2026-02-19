@@ -15,16 +15,19 @@ if current_dir not in sys.path:
 
 from .index_tts2_mode_nodes import IndexTTS2UnifiedNode
 from .index_tts2_pro import IndexTTS2ProNode  # 导入TTS2多角色小说朗读节点
+from .wav2vecNode import AudioToEmotion
 
 # 注册ComfyUI节点
 NODE_CLASS_MAPPINGS = {
     "IndexTTS2UnifiedNode": IndexTTS2UnifiedNode,
     "IndexTTS2ProNode": IndexTTS2ProNode,  # TTS2多角色小说朗读节点
+    "IndexTTS2AudioToEmotion": AudioToEmotion
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "IndexTTS2UnifiedNode": "Index TTS 2 - Customized",  # 统一节点显示名
     "IndexTTS2ProNode": "Index TTS 2 - Multi Speaker",  # TTS2多角色小说朗读节点
+    "IndexTTS2AudioToEmotion": "Index TTS 2 - Analyze Emotion"
 }
 WEB_DIRECTORY="./js"
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS',"WEB_DIRECTORY"]
