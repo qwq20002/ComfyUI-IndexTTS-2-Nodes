@@ -24,11 +24,11 @@ app.registerExtension({
             const allControlledWidgets = Object.values(WIDGET_GROUPS).flat();
 
             for (const w of node.widgets) {
+                console.log(w.name);
                 if (!allControlledWidgets.includes(w.name)) continue;
-                if (w.type === "converted-widget" || w.name === "Happy" && node.inputs?.some(i => i.name === "Happy")) {continue; }
+                if (w.type === "converted-widget") {continue; }
                 // 判断当前控件是否属于当前选中的模式
                 const shouldShow = WIDGET_GROUPS[currentMode]?.includes(w.name);
-
                 if (shouldShow) {
                     // 恢复显示
                     w.type = w.origType || w.type;
