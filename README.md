@@ -34,26 +34,25 @@
 
 ## 🔧 安装与使用
 
-1. **下载插件**  
-   将本仓库的 ZIP 文件解压到 ComfyUI 的 `custom_nodes` 目录下，或者使用git指令：
+1. **这一步很重要！！！** 先启动你的ComfyUI，在右下角找到**控制台**，点击后切换到**终端**
+2. 使用git指令下载该项目：
    ```bash
+   cd custom_nodes
    git clone https://github.com/qwq20002/ComfyUI-IndexTTS-2-Nodes
    ```
 
-2. **安装依赖**  
-   在 ComfyUI 的虚拟环境中安装所需依赖：
+3. 安装所需依赖：
    ```bash
+   cd ComfyUI-IndexTTS-2-Nodes
    pip install -r requirements.txt
    ```
 
-3. **下载模型**  
-   在虚拟环境中运行模型下载脚本：
+4. 使用这串命令自动下载所需的模型文件：
    ```bash
    python downloadModels.py
    ```
 
-4. **启动 ComfyUI**  
-   正常启动 ComfyUI，即可在节点列表中看到新的 IndexTTS 2 节点，开始使用！
+5. 重新启动ComfyUI，现在你应该能看到节点库里有ComfyUI-IndexTTS-2-Nodes了，开始使用吧！
 
 ---
 
@@ -61,6 +60,7 @@
 
 - 感谢 [IndexTTS 原项目](https://github.com/index-tts/index-tts) 提供的强大技术基础。
 - 感谢原作者 [chenpipi0817](https://github.com/chenpipi0807) 的原始实现。
+- 感谢@SilverRachel指出说明文档里的错误
 - 感谢 ComfyUI 社区的持续支持与鼓励。
 - 感谢您的使用与反馈！
 - 特别鸣谢 **Gemini Pro** 的“巨大”支持（逃 😜）
