@@ -15,7 +15,7 @@ modelscope>=1.13.0
 # pandas>=2.0.0
 json5>=0.9.16
 munch>=4.0.0
-git+https://github.com/descriptinc/audiotools@0.7.4#egg=descript-audiotools
+descript_audiotools-0.7.4-py2.py3-none-any.whl
 einops
 ffmpy
 docstring-parser
